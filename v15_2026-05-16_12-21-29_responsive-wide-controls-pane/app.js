@@ -1,0 +1,703 @@
+const circles = [
+  {
+    id: "focusTube",
+    label: "Focus tube diameter",
+    size: 620,
+    color: "#00a3ff",
+    opacity: 100,
+    min: 20,
+    max: 900
+  },
+  {
+    id: "secondaryEdge",
+    label: "Outside edge of secondary",
+    size: 440,
+    color: "#00d084",
+    opacity: 100,
+    min: 20,
+    max: 900
+  },
+  {
+    id: "primaryReflection",
+    label: "Primary reflection",
+    size: 300,
+    color: "#ffcf33",
+    opacity: 100,
+    min: 20,
+    max: 900
+  },
+  {
+    id: "secondaryReflection",
+    label: "Secondary reflection",
+    size: 170,
+    color: "#ff6b35",
+    opacity: 100,
+    min: 20,
+    max: 900
+  },
+  {
+    id: "centerPoint",
+    label: "Center point",
+    size: 18,
+    color: "#ffffff",
+    opacity: 100,
+    min: 4,
+    max: 120
+  }
+];
+
+const video = document.querySelector("#camera");
+const overlay = document.querySelector("#overlay");
+const controls = document.querySelector("#circleControls");
+const startCamera = document.querySelector("#startCamera");
+const cameraSelect = document.querySelector("#cameraSelect");
+const cameraStatus = document.querySelector("#cameraStatus");
+const brightnessControl = document.querySelector("#brightnessControl");
+const brightnessValue = document.querySelector("#brightnessValue");
+const focusControl = document.querySelector("#focusControl");
+const focusValue = document.querySelector("#focusValue");
+const overlayOffsetX = document.querySelector("#overlayOffsetX");
+const overlayOffsetXValue = document.querySelector("#overlayOffsetXValue");
+const overlayOffsetY = document.querySelector("#overlayOffsetY");
+const overlayOffsetYValue = document.querySelector("#overlayOffsetYValue");
+const imageScale = document.querySelector("#imageScale");
+const imageScaleValue = document.querySelector("#imageScaleValue");
+const imageZoom = document.querySelector("#imageZoom");
+const imageZoomValue = document.querySelector("#imageZoomValue");
+const presetName = document.querySelector("#presetName");
+const savePreset = document.querySelector("#savePreset");
+const presetSelect = document.querySelector("#presetSelect");
+const loadPreset = document.querySelector("#loadPreset");
+const presetStatus = document.querySelector("#presetStatus");
+const viewer = document.querySelector(".viewer");
+const imageStage = document.querySelector("#imageStage");
+
+let activeStream = null;
+let activeTrack = null;
+let overlayCenter = {
+  x: 0,
+  y: 0
+};
+let videoOverlayScale = 1;
+let imageScalePercent = 100;
+let imageZoomPercent = 100;
+
+const cameraControlConfigs = [
+  {
+    input: brightnessControl,
+    output: brightnessValue,
+    capability: "brightness",
+    constraint: "brightness"
+  },
+  {
+    input: focusControl,
+    output: focusValue,
+    capability: "focusDistance",
+    constraint: "focusDistance",
+    useManualFocus: true
+  }
+];
+
+function renderCircles() {
+  overlay.replaceChildren();
+
+  circles.forEach((circle) => {
+    const scaledSize = circle.size * videoOverlayScale;
+    const element = document.createElement("div");
+    element.className = "circle";
+    element.dataset.circle = circle.id;
+    element.style.setProperty("--circle-size", `${scaledSize}px`);
+    element.style.setProperty("--circle-color", circle.color);
+    element.style.setProperty("--circle-opacity", circle.opacity / 100);
+    overlay.appendChild(element);
+  });
+}
+
+function renderControls() {
+  controls.replaceChildren();
+
+  circles.forEach((circle) => {
+    const group = document.createElement("section");
+    group.className = "circle-control";
+
+    const title = document.createElement("h2");
+    title.textContent = circle.label;
+
+    const sizeRow = document.createElement("label");
+    sizeRow.className = "control-row";
+
+    const sizeLabel = document.createElement("span");
+    sizeLabel.textContent = "Size";
+
+    const sizeInput = document.createElement("input");
+    sizeInput.type = "range";
+    sizeInput.min = String(circle.min);
+    sizeInput.max = String(circle.max);
+    sizeInput.value = String(circle.size);
+
+    const sizeValue = document.createElement("span");
+    sizeValue.className = "size-value";
+    sizeValue.textContent = `${circle.size}px`;
+
+    sizeInput.addEventListener("input", () => {
+      circle.size = Number(sizeInput.value);
+      sizeValue.textContent = `${circle.size}px`;
+      renderCircles();
+    });
+
+    sizeRow.append(sizeLabel, sizeInput, sizeValue);
+
+    const colorRow = document.createElement("label");
+    colorRow.className = "control-row";
+
+    const colorLabel = document.createElement("span");
+    colorLabel.textContent = "Color";
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = circle.color;
+
+    colorInput.addEventListener("input", () => {
+      circle.color = colorInput.value;
+      renderCircles();
+    });
+
+    const colorValue = document.createElement("span");
+    colorValue.textContent = "";
+
+    colorRow.append(colorLabel, colorInput, colorValue);
+
+    const opacityRow = document.createElement("label");
+    opacityRow.className = "control-row";
+
+    const opacityLabel = document.createElement("span");
+    opacityLabel.textContent = "Opacity";
+
+    const opacityInput = document.createElement("input");
+    opacityInput.type = "range";
+    opacityInput.min = "0";
+    opacityInput.max = "100";
+    opacityInput.value = String(circle.opacity);
+
+    const opacityValue = document.createElement("span");
+    opacityValue.className = "size-value";
+    opacityValue.textContent = `${circle.opacity}%`;
+
+    opacityInput.addEventListener("input", () => {
+      circle.opacity = Number(opacityInput.value);
+      opacityValue.textContent = `${circle.opacity}%`;
+      renderCircles();
+    });
+
+    opacityRow.append(opacityLabel, opacityInput, opacityValue);
+    group.append(title, sizeRow, colorRow, opacityRow);
+    controls.appendChild(group);
+  });
+
+  installSliderStepButtons(controls);
+}
+
+function installSliderStepButtons(root = document) {
+  root.querySelectorAll("input[type='range']").forEach((input) => {
+    if (input.dataset.stepButtonsInstalled === "true") {
+      syncSliderStepButtons(input);
+      return;
+    }
+
+    const row = input.closest(".control-row");
+
+    if (!row) {
+      return;
+    }
+
+    const decreaseButton = document.createElement("button");
+    decreaseButton.type = "button";
+    decreaseButton.className = "slider-step-button";
+    decreaseButton.textContent = "-";
+    decreaseButton.setAttribute("aria-label", "Decrease value");
+
+    const increaseButton = document.createElement("button");
+    increaseButton.type = "button";
+    increaseButton.className = "slider-step-button";
+    increaseButton.textContent = "+";
+    increaseButton.setAttribute("aria-label", "Increase value");
+
+    decreaseButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      stepSlider(input, -1);
+    });
+
+    increaseButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      stepSlider(input, 1);
+    });
+
+    input.before(decreaseButton);
+    input.after(increaseButton);
+    input.dataset.stepButtonsInstalled = "true";
+    row.classList.add("slider-row");
+    syncSliderStepButtons(input);
+  });
+}
+
+function stepSlider(input, direction) {
+  if (input.disabled) {
+    return;
+  }
+
+  if (direction > 0) {
+    input.stepUp();
+  } else {
+    input.stepDown();
+  }
+
+  input.dispatchEvent(new Event("input", {
+    bubbles: true
+  }));
+  input.dispatchEvent(new Event("change", {
+    bubbles: true
+  }));
+  syncSliderStepButtons(input);
+}
+
+function syncSliderStepButtons(input) {
+  const row = input.closest(".control-row");
+
+  if (!row) {
+    return;
+  }
+
+  row.querySelectorAll(".slider-step-button").forEach((button) => {
+    button.disabled = input.disabled;
+  });
+}
+
+function syncAllSliderStepButtons() {
+  document.querySelectorAll("input[type='range']").forEach(syncSliderStepButtons);
+}
+
+function updateOverlayCenter() {
+  overlay.style.setProperty("--overlay-offset-x", `${overlayCenter.x * videoOverlayScale}px`);
+  overlay.style.setProperty("--overlay-offset-y", `${overlayCenter.y * videoOverlayScale}px`);
+  overlayOffsetX.value = String(overlayCenter.x);
+  overlayOffsetY.value = String(overlayCenter.y);
+  overlayOffsetXValue.textContent = `${overlayCenter.x}px`;
+  overlayOffsetYValue.textContent = `${overlayCenter.y}px`;
+}
+
+function updateVideoOverlayGeometry() {
+  const viewerRect = viewer.getBoundingClientRect();
+  const videoWidth = video.videoWidth;
+  const videoHeight = video.videoHeight;
+
+  if (!videoWidth || !videoHeight || !viewerRect.width || !viewerRect.height) {
+    imageStage.style.left = "0px";
+    imageStage.style.top = "0px";
+    imageStage.style.width = `${viewerRect.width}px`;
+    imageStage.style.height = `${viewerRect.height}px`;
+    updateZoomedContentGeometry(viewerRect.width, viewerRect.height, viewerRect.width);
+    videoOverlayScale = 1;
+    updateOverlayCenter();
+    renderCircles();
+    return;
+  }
+
+  const videoAspect = videoWidth / videoHeight;
+  const viewerAspect = viewerRect.width / viewerRect.height;
+  let displayedWidth = viewerRect.width;
+  let displayedHeight = viewerRect.height;
+
+  if (viewerAspect > videoAspect) {
+    displayedHeight = viewerRect.height;
+    displayedWidth = displayedHeight * videoAspect;
+  } else {
+    displayedWidth = viewerRect.width;
+    displayedHeight = displayedWidth / videoAspect;
+  }
+
+  const scale = imageScalePercent / 100;
+  displayedWidth *= scale;
+  displayedHeight *= scale;
+
+  const left = (viewerRect.width - displayedWidth) / 2;
+  const top = (viewerRect.height - displayedHeight) / 2;
+
+  imageStage.style.left = `${left}px`;
+  imageStage.style.top = `${top}px`;
+  imageStage.style.width = `${displayedWidth}px`;
+  imageStage.style.height = `${displayedHeight}px`;
+  updateZoomedContentGeometry(displayedWidth, displayedHeight, displayedWidth);
+  videoOverlayScale = (displayedWidth * (imageZoomPercent / 100)) / videoWidth;
+
+  updateOverlayCenter();
+  renderCircles();
+}
+
+function updateZoomedContentGeometry(stageWidth, stageHeight) {
+  const zoom = imageZoomPercent / 100;
+  const zoomedWidth = stageWidth * zoom;
+  const zoomedHeight = stageHeight * zoom;
+  const left = (stageWidth - zoomedWidth) / 2;
+  const top = (stageHeight - zoomedHeight) / 2;
+
+  video.style.left = `${left}px`;
+  video.style.top = `${top}px`;
+  video.style.width = `${zoomedWidth}px`;
+  video.style.height = `${zoomedHeight}px`;
+  overlay.style.left = `${left}px`;
+  overlay.style.top = `${top}px`;
+  overlay.style.width = `${zoomedWidth}px`;
+  overlay.style.height = `${zoomedHeight}px`;
+}
+
+function updateImageScale() {
+  imageScalePercent = Number(imageScale.value);
+  imageScaleValue.textContent = `${imageScalePercent}%`;
+  updateVideoOverlayGeometry();
+}
+
+function updateImageZoom() {
+  imageZoomPercent = Number(imageZoom.value);
+  imageZoomValue.textContent = `${imageZoomPercent}%`;
+  updateVideoOverlayGeometry();
+}
+
+function buildPreset() {
+  return {
+    name: presetName.value.trim(),
+    savedAt: new Date().toISOString(),
+    circles: circles.map((circle) => ({
+      id: circle.id,
+      label: circle.label,
+      size: circle.size,
+      color: circle.color,
+      opacity: circle.opacity
+    })),
+    overlayCenter: {
+      x: overlayCenter.x,
+      y: overlayCenter.y
+    },
+    imageScalePercent,
+    imageZoomPercent
+  };
+}
+
+function applyPreset(preset) {
+  if (!preset || !Array.isArray(preset.circles)) {
+    return;
+  }
+
+  preset.circles.forEach((savedCircle) => {
+    const circle = circles.find((item) => item.id === savedCircle.id);
+
+    if (!circle) {
+      return;
+    }
+
+    if (Number.isFinite(savedCircle.size)) {
+      circle.size = savedCircle.size;
+    }
+
+    if (typeof savedCircle.color === "string") {
+      circle.color = savedCircle.color;
+    }
+
+    if (Number.isFinite(savedCircle.opacity)) {
+      circle.opacity = savedCircle.opacity;
+    }
+  });
+
+  if (preset.overlayCenter) {
+    overlayCenter = {
+      x: Number.isFinite(preset.overlayCenter.x) ? preset.overlayCenter.x : overlayCenter.x,
+      y: Number.isFinite(preset.overlayCenter.y) ? preset.overlayCenter.y : overlayCenter.y
+    };
+  }
+
+  if (Number.isFinite(preset.imageScalePercent)) {
+    imageScalePercent = preset.imageScalePercent;
+    imageScale.value = String(imageScalePercent);
+    imageScaleValue.textContent = `${imageScalePercent}%`;
+  }
+
+  if (Number.isFinite(preset.imageZoomPercent)) {
+    imageZoomPercent = preset.imageZoomPercent;
+    imageZoom.value = String(imageZoomPercent);
+    imageZoomValue.textContent = `${imageZoomPercent}%`;
+  }
+
+  if (typeof preset.name === "string") {
+    presetName.value = preset.name;
+  }
+
+  renderControls();
+  updateVideoOverlayGeometry();
+}
+
+async function refreshPresetList() {
+  try {
+    const response = await fetch("/api/presets");
+
+    if (!response.ok) {
+      throw new Error("Preset list failed");
+    }
+
+    const presets = await response.json();
+    presetSelect.replaceChildren();
+
+    if (presets.length === 0) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No saved presets";
+      presetSelect.appendChild(option);
+      presetStatus.textContent = "No saved presets";
+      return;
+    }
+
+    presets.forEach((preset) => {
+      const option = document.createElement("option");
+      option.value = preset.file;
+      option.textContent = preset.name;
+      presetSelect.appendChild(option);
+    });
+
+    presetStatus.textContent = "Presets ready";
+  } catch (error) {
+    presetStatus.textContent = "Preset server unavailable";
+  }
+}
+
+async function saveCurrentPreset() {
+  const preset = buildPreset();
+
+  if (!preset.name) {
+    presetStatus.textContent = "Enter a preset name";
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/presets", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(preset)
+    });
+
+    if (!response.ok) {
+      throw new Error("Preset save failed");
+    }
+
+    const savedPreset = await response.json();
+    await refreshPresetList();
+    presetSelect.value = savedPreset.file;
+    presetStatus.textContent = "Preset saved";
+  } catch (error) {
+    presetStatus.textContent = "Preset save failed";
+  }
+}
+
+async function loadSelectedPreset() {
+  if (!presetSelect.value) {
+    presetStatus.textContent = "Select a preset";
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/presets/${encodeURIComponent(presetSelect.value)}`);
+
+    if (!response.ok) {
+      throw new Error("Preset load failed");
+    }
+
+    const preset = await response.json();
+    applyPreset(preset);
+    presetStatus.textContent = "Preset loaded";
+  } catch (error) {
+    presetStatus.textContent = "Preset load failed";
+  }
+}
+
+async function openCamera() {
+  startCamera.disabled = true;
+  cameraStatus.textContent = "Starting camera";
+
+  try {
+    stopActiveStream();
+
+    const deviceId = cameraSelect.value;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: deviceId ? { deviceId: { exact: deviceId } } : true,
+      audio: false
+    });
+
+    activeStream = stream;
+    activeTrack = stream.getVideoTracks()[0] || null;
+    video.srcObject = stream;
+    cameraStatus.textContent = "Camera active";
+    await loadCameraOptions(stream);
+    loadCameraControls();
+    updateVideoOverlayGeometry();
+  } catch (error) {
+    startCamera.disabled = false;
+    cameraStatus.textContent = "Camera unavailable";
+    resetCameraControls();
+  }
+}
+
+function stopActiveStream() {
+  if (!activeStream) {
+    return;
+  }
+
+  activeStream.getTracks().forEach((track) => track.stop());
+  activeStream = null;
+  activeTrack = null;
+  resetCameraControls();
+}
+
+async function loadCameraOptions(stream) {
+  const activeTrack = stream.getVideoTracks()[0];
+  const activeDeviceId = activeTrack?.getSettings().deviceId || cameraSelect.value;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cameras = devices.filter((device) => device.kind === "videoinput");
+
+  cameraSelect.replaceChildren();
+
+  cameras.forEach((camera, index) => {
+    const option = document.createElement("option");
+    option.value = camera.deviceId;
+    option.textContent = camera.label || `Camera ${index + 1}`;
+    cameraSelect.appendChild(option);
+  });
+
+  cameraSelect.disabled = cameras.length === 0;
+
+  if (activeDeviceId) {
+    cameraSelect.value = activeDeviceId;
+  }
+}
+
+function resetCameraControls() {
+  cameraControlConfigs.forEach((control) => {
+    control.input.disabled = true;
+    control.input.removeAttribute("min");
+    control.input.removeAttribute("max");
+    control.input.removeAttribute("step");
+    control.input.value = "";
+    control.output.textContent = "--";
+  });
+  syncAllSliderStepButtons();
+}
+
+function loadCameraControls() {
+  resetCameraControls();
+
+  if (!activeTrack?.getCapabilities) {
+    return;
+  }
+
+  const capabilities = activeTrack.getCapabilities();
+  const settings = activeTrack.getSettings ? activeTrack.getSettings() : {};
+
+  cameraControlConfigs.forEach((control) => {
+    const capability = capabilities[control.capability];
+
+    if (!isRangeCapability(capability)) {
+      control.output.textContent = "N/A";
+      return;
+    }
+
+    const value = Number.isFinite(settings[control.constraint])
+      ? settings[control.constraint]
+      : midpoint(capability.min, capability.max);
+
+    control.input.min = String(capability.min);
+    control.input.max = String(capability.max);
+    control.input.step = String(capability.step || 1);
+    control.input.value = String(value);
+    control.input.disabled = false;
+    control.output.textContent = formatControlValue(value);
+  });
+  syncAllSliderStepButtons();
+}
+
+function isRangeCapability(capability) {
+  return capability
+    && Number.isFinite(capability.min)
+    && Number.isFinite(capability.max)
+    && capability.min < capability.max;
+}
+
+function midpoint(minimum, maximum) {
+  return (minimum + maximum) / 2;
+}
+
+function formatControlValue(value) {
+  return Number(value).toFixed(1).replace(/\.0$/, "");
+}
+
+async function applyCameraControl(control) {
+  if (!activeTrack) {
+    return;
+  }
+
+  const value = Number(control.input.value);
+  const advancedConstraint = {
+    [control.constraint]: value
+  };
+
+  if (control.useManualFocus) {
+    advancedConstraint.focusMode = "manual";
+  }
+
+  try {
+    await activeTrack.applyConstraints({
+      advanced: [advancedConstraint]
+    });
+    control.output.textContent = formatControlValue(value);
+  } catch (error) {
+    cameraStatus.textContent = "Camera control unavailable";
+    loadCameraControls();
+  }
+}
+
+startCamera.addEventListener("click", openCamera);
+cameraSelect.addEventListener("change", openCamera);
+cameraControlConfigs.forEach((control) => {
+  control.input.addEventListener("input", () => {
+    control.output.textContent = formatControlValue(control.input.value);
+  });
+
+  control.input.addEventListener("change", () => {
+    applyCameraControl(control);
+  });
+});
+overlayOffsetX.addEventListener("input", () => {
+  overlayCenter.x = Number(overlayOffsetX.value);
+  updateOverlayCenter();
+});
+overlayOffsetY.addEventListener("input", () => {
+  overlayCenter.y = Number(overlayOffsetY.value);
+  updateOverlayCenter();
+});
+imageScale.addEventListener("input", updateImageScale);
+imageZoom.addEventListener("input", updateImageZoom);
+savePreset.addEventListener("click", saveCurrentPreset);
+loadPreset.addEventListener("click", loadSelectedPreset);
+video.addEventListener("loadedmetadata", updateVideoOverlayGeometry);
+window.addEventListener("resize", updateVideoOverlayGeometry);
+
+if ("ResizeObserver" in window) {
+  const resizeObserver = new ResizeObserver(updateVideoOverlayGeometry);
+  resizeObserver.observe(viewer);
+}
+
+renderCircles();
+renderControls();
+installSliderStepButtons();
+resetCameraControls();
+updateImageScale();
+updateImageZoom();
+updateVideoOverlayGeometry();
+refreshPresetList();

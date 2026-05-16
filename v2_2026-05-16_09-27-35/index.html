@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Collimation Circles</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="viewer" aria-label="Camera view">
+        <video id="camera" autoplay playsinline muted></video>
+        <div id="overlay" class="overlay" aria-hidden="true"></div>
+        <div id="cameraStatus" class="camera-status">Camera not started</div>
+      </section>
+
+      <aside class="controls" aria-label="Circle controls">
+        <header class="controls-header">
+          <h1>Collimation Circles</h1>
+          <button id="startCamera" type="button">Start Camera</button>
+        </header>
+
+        <div id="circleControls" class="circle-controls"></div>
+      </aside>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

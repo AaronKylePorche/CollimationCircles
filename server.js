@@ -4,7 +4,7 @@ const path = require("path");
 
 const port = Number(process.env.PORT || 8001);
 const publicRoot = __dirname;
-const presetsRoot = path.resolve(__dirname, "..", "presets");
+const presetsRoot = path.resolve(__dirname, "presets");
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",

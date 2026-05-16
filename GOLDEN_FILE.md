@@ -41,10 +41,14 @@ Timestamped version folders are the permanent version history. The `current` fol
 
 ## Current Version
 
-Version: 16
-Name: Final Release Instructions
+Version: 17
+Name: Simplified GitHub Package
 
 ## Version Log
+
+### Version 17 - Simplified GitHub Package - 2026-05-16 12:41:04 -07:00
+
+Created `v17_2026-05-16_12-41-04_simplified-github-package` from `current`. Reworked the GitHub package so first-time users download a simple root-level app instead of the full local version history. Added root-level app files, updated the root server preset path, rewrote `README.md` with step-by-step ZIP download, Command Prompt startup, browser launch, and shutdown instructions, and updated `.gitignore` so `current` and timestamped version folders are local-only and no longer included in GitHub.
 
 ### Version 16 - Final Release Instructions - 2026-05-16 12:31:03 -07:00
 
